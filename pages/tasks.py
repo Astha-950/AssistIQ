@@ -5,11 +5,18 @@ from pathlib import Path
 from datetime import date
 import os
 
+
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except:
+        return os.getenv(key)
+
 supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
+    get_secret("SUPABASE_URL"),
+    get_secret("SUPABASE_KEY")
 )
 
 # check login

@@ -1,22 +1,26 @@
 import streamlit as st
 from supabase import create_client
 from dotenv import load_dotenv
-import anthropic
 import os
 import json
 from datetime import date
-
 from pathlib import Path
+from groq import Groq
+
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
-print("KEY:", os.getenv("ANTHROPIC_API_KEY"))
+
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except:
+        return os.getenv(key)
 
 supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
+    get_secret("SUPABASE_URL"),
+    get_secret("SUPABASE_KEY")
 )
 
-from groq import Groq
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = Groq(api_key=get_secret("GROQ_API_KEY"))
 
 # check login
 if "user" not in st.session_state or not st.session_state.user:
@@ -50,7 +54,6 @@ def add_task(user_id, title, deadline=None, priority="medium"):
     }).execute()
 
 def add_struggle(user_id, topic, confidence_score=2):
-    # check if already exists
     existing = supabase.table("struggles").select("*").eq("user_id", user_id).eq("topic", topic).eq("status", "active").execute()
     if not existing.data:
         supabase.table("struggles").insert({
@@ -80,7 +83,7 @@ def complete_task_by_title(user_id, title_keyword):
                 return task["title"]
     return None
 
-# ─── CLAUDE FUNCTIONS ───
+# ─── GROQ FUNCTIONS ───
 
 def build_system_prompt(user_data, tasks, struggles):
     tasks_text = "\n".join([f"- {t['title']} (priority: {t['priority']}, deadline: {t.get('deadline', 'none')})" for t in tasks]) if tasks else "No pending tasks"
@@ -106,17 +109,18 @@ Your job:
 Always respond in this format when you detect an action:
 First give your natural conversational response.
 Then at the very end if there is an action, add a JSON block like this:
+
 ```json
 {{
   "action": "add_task" | "add_struggle" | "complete_task" | "update_confidence",
   "data": {{
-    "title": "task title",          // for add_task
-    "deadline": "YYYY-MM-DD",       // for add_task (null if not mentioned)
-    "priority": "high/medium/low",  // for add_task
-    "topic": "topic name",          // for add_struggle or update_confidence
-    "confidence_score": 2,          // for add_struggle (1-5 if struggling)
-    "change": 1,                    // for update_confidence (+1 or -1)
-    "keyword": "keyword"            // for complete_task
+    "title": "task title",
+    "deadline": "YYYY-MM-DD",
+    "priority": "high/medium/low",
+    "topic": "topic name",
+    "confidence_score": 2,
+    "change": 1,
+    "keyword": "keyword"
   }}
 }}
 ```
@@ -157,7 +161,7 @@ def extract_and_handle_action(response_text, user_id):
         pass
     return None
 
-def chat_with_claude(messages, user_data, tasks, struggles):
+def chat_with_groq(messages, user_data, tasks, struggles):
     system = build_system_prompt(user_data, tasks, struggles)
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -171,50 +175,39 @@ def chat_with_claude(messages, user_data, tasks, struggles):
 st.set_page_config(page_title="Chat - AssistIQ", page_icon="💬", layout="wide")
 st.title("💬 Chat with AssistIQ")
 
-# load user data
 user_data = get_user(user_id)
 tasks = get_pending_tasks(user_id)
 struggles = get_active_struggles(user_id)
 
-# initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# chat input
 if prompt := st.chat_input("Talk to your assistant..."):
-
-    # show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # get claude response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            # only send role and content to claude
-            claude_messages = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-            response = chat_with_claude(claude_messages, user_data, tasks, struggles)
+            groq_messages = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+            response = chat_with_groq(groq_messages, user_data, tasks, struggles)
 
-            # clean response (remove json block from display)
             display_response = response
             if "```json" in response:
                 display_response = response[:response.find("```json")].strip()
 
             st.markdown(display_response)
 
-            # handle any actions
             action_result = extract_and_handle_action(response, user_id)
             if action_result:
                 st.success(action_result)
 
     st.session_state.messages.append({"role": "assistant", "content": display_response})
 
-# sidebar
 with st.sidebar:
     st.markdown("### Quick Info")
     st.markdown(f"**Pending Tasks:** {len(tasks)}")

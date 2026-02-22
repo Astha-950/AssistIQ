@@ -18,12 +18,18 @@ from core.notion import get_notion_pages, get_page_content
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except:
+        return os.getenv(key)
+
 supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
+    get_secret("SUPABASE_URL"),
+    get_secret("SUPABASE_KEY")
 )
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = Groq(api_key=get_secret("GROQ_API_KEY"))
 
 # check login
 if "user" not in st.session_state or not st.session_state.user:
@@ -38,7 +44,7 @@ def save_note_to_db(user_id, filename, source, content):
         "user_id": user_id,
         "file_name": filename,
         "source": source,
-        "content": content[:500]  # save preview
+        "content": content[:500]
     }).execute()
 
 def get_notes(user_id):
@@ -91,27 +97,21 @@ with tab1:
     if uploaded_file:
         if st.button("📥 Process PDF", use_container_width=True):
             with st.spinner("Reading and indexing your PDF..."):
-                # save to temp file
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(uploaded_file.read())
                     tmp_path = tmp.name
 
-                # extract text
                 text = extract_text_from_pdf(tmp_path)
 
                 if text.strip():
-                    # add to chromadb
                     add_document_to_index(user_id, text, uploaded_file.name, "pdf")
-                    # save to supabase
                     save_note_to_db(user_id, uploaded_file.name, "pdf", text)
                     st.success(f"✅ {uploaded_file.name} indexed successfully!")
                 else:
                     st.error("Could not extract text from PDF. Make sure it is not a scanned image.")
 
-                # cleanup temp file
                 os.unlink(tmp_path)
 
-    # show uploaded notes
     st.markdown("---")
     st.subheader("📁 Your Uploaded Notes")
     notes = get_notes(user_id)
@@ -163,7 +163,6 @@ with tab2:
                 else:
                     st.error("Could not fetch page content. Make sure your integration has access to this page.")
 
-    # show notion notes
     st.markdown("---")
     st.subheader("📁 Indexed Notion Pages")
     notes = get_notes(user_id)
@@ -188,14 +187,12 @@ with tab3:
         if "qa_history" not in st.session_state:
             st.session_state.qa_history = []
 
-        # show history
         for qa in st.session_state.qa_history:
             with st.chat_message("user"):
                 st.markdown(qa["question"])
             with st.chat_message("assistant"):
                 st.markdown(qa["answer"])
 
-        # input
         question = st.chat_input("Ask a question from your notes...")
         if question:
             with st.chat_message("user"):

@@ -7,9 +7,15 @@ import os
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except:
+        return os.getenv(key)
+
 supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
+    get_secret("SUPABASE_URL"),
+    get_secret("SUPABASE_KEY")
 )
 
 # check login
@@ -63,7 +69,6 @@ with tab1:
     if not active:
         st.success("No active struggles! You are on top of everything.")
     else:
-        # check if any topic needs attention (confidence >= 7)
         flag_topics = [s for s in active if s["confidence_score"] >= 7]
         if flag_topics:
             for t in flag_topics:
@@ -74,7 +79,6 @@ with tab1:
 
         st.markdown("---")
 
-        # show all active struggles
         for struggle in active:
             with st.container():
                 col1, col2, col3 = st.columns([4, 2, 2])
@@ -95,7 +99,6 @@ with tab1:
 
                 st.markdown("---")
 
-    # add manually
     st.subheader("➕ Add Struggle Manually")
     with st.form("add_struggle_form"):
         topic = st.text_input("Topic Name (e.g. Dynamic Programming)")

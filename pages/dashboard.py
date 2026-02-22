@@ -5,18 +5,21 @@ from datetime import date
 import os
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).parent.parent))
 from core.rollover import run_rollover
 
-from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
-
-
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except:
+        return os.getenv(key)
 
 supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
+    get_secret("SUPABASE_URL"),
+    get_secret("SUPABASE_KEY")
 )
 
 # check if user is logged in
@@ -26,14 +29,14 @@ if "user" not in st.session_state or not st.session_state.user:
 user = st.session_state.user
 user_id = user.id
 
-# get user details from db
+# ─── DATABASE FUNCTIONS ───
+
 def get_user(user_id):
     response = supabase.table("users").select("*").eq("id", user_id).execute()
     if response.data:
         return response.data[0]
     return None
 
-# update streak
 def update_streak(user_id, user_data):
     today = date.today()
     last_active = user_data.get("last_active_date")
@@ -43,12 +46,11 @@ def update_streak(user_id, user_data):
         last_active = date.fromisoformat(last_active)
         diff = (today - last_active).days
         if diff == 1:
-            current_streak += 1  # consecutive day
+            current_streak += 1
         elif diff > 1:
-            current_streak = 1   # streak broken
-        # if diff == 0 same day, no change
+            current_streak = 1
     else:
-        current_streak = 1  # first time
+        current_streak = 1
 
     # reset plan_generated_today if new day
     if last_active and last_active != today:
@@ -63,7 +65,6 @@ def update_streak(user_id, user_data):
 
     return current_streak
 
-# get time based greeting
 def get_greeting():
     from datetime import datetime
     hour = datetime.now().hour
@@ -76,17 +77,14 @@ def get_greeting():
     else:
         return "Good Night", "🌙", "night"
 
-# get pending tasks count
 def get_pending_tasks(user_id):
     response = supabase.table("tasks").select("*").eq("user_id", user_id).eq("status", "pending").execute()
     return response.data if response.data else []
 
-# get active struggles count
 def get_active_struggles(user_id):
     response = supabase.table("struggles").select("*").eq("user_id", user_id).eq("status", "active").execute()
     return response.data if response.data else []
 
-# check if plan generated today
 def check_plan_today(user_id):
     response = supabase.table("users").select("plan_generated_today").eq("id", user_id).execute()
     if response.data:
@@ -157,7 +155,7 @@ elif time_of_day == "evening":
     else:
         st.info("Evening check-in time! Head to Chat and tell me how your day went.")
 
-else:  # night
+else:
     st.info("Late night! Let's plan tomorrow so you start fresh.")
     if st.button("🗓️ Plan Tomorrow", use_container_width=True):
         st.switch_page("pages/planner.py")
@@ -183,7 +181,6 @@ with c4:
 
 st.markdown("---")
 
-# logout
 if st.button("🚪 Logout"):
     st.session_state.clear()
     st.switch_page("app.py")

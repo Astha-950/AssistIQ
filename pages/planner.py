@@ -8,12 +8,18 @@ import os
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except:
+        return os.getenv(key)
+
 supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
+    get_secret("SUPABASE_URL"),
+    get_secret("SUPABASE_KEY")
 )
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = Groq(api_key=get_secret("GROQ_API_KEY"))
 
 # check login
 if "user" not in st.session_state or not st.session_state.user:
