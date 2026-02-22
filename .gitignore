@@ -1,0 +1,7 @@
+.env
+venv/
+vector_store/
+uploads/
+__pycache__/
+*.pyc
+.DS_Store

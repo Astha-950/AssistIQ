@@ -1,0 +1,37 @@
+name: AssistIQ CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Check syntax errors
+      run: |
+        python -m py_compile app.py
+        python -m py_compile pages/dashboard.py
+        python -m py_compile pages/chat.py
+        python -m py_compile pages/tasks.py
+        python -m py_compile pages/struggles.py
+        python -m py_compile pages/planner.py
+        python -m py_compile pages/notes.py
+        python -m py_compile core/rag.py
+        python -m py_compile core/rollover.py
+        echo "All files passed syntax check!"
